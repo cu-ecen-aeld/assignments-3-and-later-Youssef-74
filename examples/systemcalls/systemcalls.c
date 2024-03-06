@@ -16,8 +16,23 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
+    int status = system(cmd);
 
-    return true;
+    if (status == -1) {
+        // Error invoking the system() call
+        perror("system");
+        return false;
+    }
+
+    // Check if the command was executed successfully
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+        // The command completed successfully
+        return true;
+    } else {
+        // The command returned a non-zero exit status
+        fprintf(stderr, "Command failed with exit status %d\n", WEXITSTATUS(status));
+        return false;
+    }
 }
 
 /**
@@ -58,10 +73,48 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
-
     va_end(args);
 
-    return true;
+    // check if the command specified with absolute path 
+    if(command != NULL && **command == '/')
+    {
+        // first create a child process using fork()
+        pid_t pid = fork();
+        // check if the child process creaed successfully 
+        if(pid == -1){
+            perror("fork");
+            return false;
+        }
+
+        // if the child created successfully 
+        if(pid == 0)
+        {
+            // in the child process 
+            // execute the command using the execv() 
+            execv(command[0], command);
+            // If execv fails, print an error message
+            perror("execv");
+            //exit(EXIT_FAILURE);
+            return false;
+        }
+        else {
+            // in parent process 
+
+            // wait for the child process to complete 
+            int status;
+            waitpid(pid, &status, 0);
+
+            // Check if the child process exited successfully
+            return WIFEXITED(status) && (WEXITSTATUS(status) == 0);
+        }
+
+
+        return true;
+
+    }
+
+    return false;
+
 }
 
 /**
@@ -92,8 +145,69 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
-
     va_end(args);
 
-    return true;
+    // check if the command specified with absolute path 
+    if(command != NULL && **command == '/')
+    {
+        // first of all overwrite the output file or create if not exist
+        int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644); 
+
+        // check if the file opened successfully 
+        if(fd < 0)
+        {
+            perror("open");
+            //exit(EXIT_FAILURE);
+            return false;
+        }
+
+        else{
+            // first create a child process using fork()
+            pid_t pid = fork();
+            // check if the child process created successfully 
+            if(pid == -1){
+                // Fork failed
+                perror("fork");
+                close(fd);
+            }
+
+            // if the child created successfully 
+            if(pid == 0 && command != NULL && command[0][0] == '/')
+            {
+                // in the child process 
+                // Redirect standard output to the file descriptor
+                if (dup2(fd, STDOUT_FILENO) == -1) {
+                    perror("dup2");
+                    close(fd);
+                    //exit(EXIT_FAILURE);
+                    return false;
+                }
+
+                // Close the original file descriptor
+                close(fd);
+
+                // execute the command using the execv() 
+                execv(command[0], command);
+                // If execv fails, print an error message
+                perror("execv");
+                //exit(EXIT_FAILURE);
+                return false;
+            }
+            else {
+                // in parent process 
+
+                // wait for the child process to complete 
+                int status;
+                waitpid(pid, &status, 0);
+
+                // Check if the child process exited successfully
+                return WIFEXITED(status) && (WEXITSTATUS(status) == 0);
+            }
+
+        }
+
+        return true;
+    }
+    
+    return false;
 }
