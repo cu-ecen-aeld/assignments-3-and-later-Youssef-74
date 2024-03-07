@@ -97,7 +97,7 @@ make -j$(nproc) ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE}
 # last step define the path to the root filesystem and the install generated files in it 
 make CONFIG_PREFIX=${OUTDIR}/rootfs ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} install
 
-cd ${OUTDIR}/rootfs
+#cd ${OUTDIR}/rootfs
 
 echo "Library dependencies"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
