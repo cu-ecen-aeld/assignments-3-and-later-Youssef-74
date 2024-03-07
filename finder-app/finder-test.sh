@@ -32,7 +32,10 @@ echo "Writing ${NUMFILES} files containing string ${WRITESTR} to ${WRITEDIR}"
 rm -rf "${WRITEDIR}"
 
 # create $WRITEDIR if not assignment1
-assignment=`cat ../conf/assignment.txt`
+#assignment=`cat ../conf/assignment.txt`
+# edit to refernce the conf/assignemtn.txt inside the created rootfs
+assignment=`cat conf/assignment.txt`
+
 
 if [ $assignment != 'assignment1' ]
 then
@@ -49,10 +52,10 @@ then
 	fi
 fi
 #echo "Removing the old writer utility and compiling as a native application"
-make clean
+#make clean
 #make
 # edit to compile with the cross compiler aarch64-none-linux-gnu-
-make CROSS_COMPILE=aarch64-none-linux-gnu-
+#make CROSS_COMPILE=aarch64-none-linux-gnu-
 
 for i in $( seq 1 $NUMFILES)
 do
