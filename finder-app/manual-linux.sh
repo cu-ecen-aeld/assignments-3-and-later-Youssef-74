@@ -98,21 +98,22 @@ make -j$(nproc) ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE}
 # last step define the path to the root filesystem and the install generated files in it 
 make CONFIG_PREFIX=${OUTDIR}/rootfs ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} install
 
-#cd ${OUTDIR}/rootfs
+cd ${OUTDIR}/rootfs
 
 echo "Library dependencies"
-#${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
-#${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
+${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
+${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 
 # TODO: Add library dependencies to rootfs
-echo "Add library dependencies to rootfs"
-aarch64_toolchain=/home/youssef/AELD/x-tools/aarch64_toolchain/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu
-# copy the needed libraries from toolchain sysroot to /lib and /lib64 of created rootfs
-cp ${aarch64_toolchain}/aarch64-none-linux-gnu/libc/lib/ld-linux-aarch64.so.1 ${OUTDIR}/rootfs/lib
-cp ${aarch64_toolchain}/aarch64-none-linux-gnu/libc/lib64/libm.so.6 ${OUTDIR}/rootfs/lib64
-cp ${aarch64_toolchain}/aarch64-none-linux-gnu/libc/lib64/libresolv.so.2 ${OUTDIR}/rootfs/lib64
-cp ${aarch64_toolchain}/aarch64-none-linux-gnu/libc/lib64/libc.so.6 ${OUTDIR}/rootfs/lib64
+# Find the toolchain sysroot path dynamically
+TOOLCHAIN_SYSROOT=/home/youssef/AELD/x-tools/aarch64_toolchain/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu
 
+# copy the needed libraries from toolchain sysroot to /lib and /lib64 of created rootfs
+cp "${TOOLCHAIN_SYSROOT}/aarch64-none-linux-gnu/libc/lib/ld-linux-aarch64.so.1" ${OUTDIR}/rootfs/lib
+cp "${TOOLCHAIN_SYSROOT}/aarch64-none-linux-gnu/libc/lib64/libm.so.6" "${OUTDIR}/rootfs/lib64"
+cp "${TOOLCHAIN_SYSROOT}/aarch64-none-linux-gnu/libc/lib64/libresolv.so.2" "${OUTDIR}/rootfs/lib64"
+cp "${TOOLCHAIN_SYSROOT}/aarch64-none-linux-gnu/libc/lib64/libc.so.6" "${OUTDIR}/rootfs/lib64"
+#cp "$SYSROOT_PATH/lib/aarch64-linux-gnu/libm.so.6" "${OUTDIR}/rootfs/lib64"
 
 # TODO: Make device nodes
 sudo mknod -m 666 ${OUTDIR}/rootfs/dev/null c 1 3
