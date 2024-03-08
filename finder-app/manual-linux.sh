@@ -90,7 +90,8 @@ else
 fi
 
 # TODO: Make and install busybox
-
+#make distclean
+#make defconfig
 # third build the busybox image 
 make -j$(nproc) ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} 
 
@@ -100,8 +101,8 @@ make CONFIG_PREFIX=${OUTDIR}/rootfs ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} 
 #cd ${OUTDIR}/rootfs
 
 echo "Library dependencies"
-${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
-${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
+#${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
+#${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 
 # TODO: Add library dependencies to rootfs
 echo "Add library dependencies to rootfs"
