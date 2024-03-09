@@ -12,6 +12,28 @@ BUSYBOX_VERSION=1_33_1
 FINDER_APP_DIR=$(realpath $(dirname $0))
 ARCH=arm64
 CROSS_COMPILE=aarch64-none-linux-gnu-
+READELF=aarch64-none-linux-gnu-readelf
+
+function copy_libdepends() {
+    local program_interpreter=$(${READELF} -l ${OUTDIR}/rootfs/bin/busybox | grep -Eo "ld-[[:alnum:]]*-[[:alnum:]]*.so.[0-9]*" )
+    local shared=$(${READELF} -d ${OUTDIR}/rootfs/bin/busybox | grep -Eow "lib[[:alnum:]]*\.so\.[[:digit:]]*" )
+    test -z "${shared}" && return 1
+    test -z "${program_interpreter}" && return 1
+    
+    TOOLCHAIN_SYSROOT=$(aarch64-none-linux-gnu-gcc -print-sysroot)
+    for dep in ${shared};
+    do
+        find ${TOOLCHAIN_SYSROOT} -name "${dep}" -exec cp -v {} ${OUTDIR}/rootfs/lib64 \;
+    done
+    for dep in ${program_interpreter};
+    do
+        find ${TOOLCHAIN_SYSROOT} -name "${dep}" -exec cp -v {} ${OUTDIR}/rootfs/lib \;
+    done
+
+    return 0
+}
+
+echo ${FINDER_APP_DIR}
 
 if [ $# -lt 1 ]
 then
@@ -46,7 +68,7 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
     make -j$(nproc) ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} all
 
     # fourth step build the kernel modules and the devicetree 
-    #make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} modules
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} modules
     make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} dtbs
 
 fi
@@ -98,21 +120,26 @@ make -j$(nproc) ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE}
 # last step define the path to the root filesystem and the install generated files in it 
 make CONFIG_PREFIX=${OUTDIR}/rootfs ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} install
 
-cd ${OUTDIR}/rootfs
-
 #echo "Library dependencies"
-#${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
-#${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
+${CROSS_COMPILE}readelf -a ${OUTDIR}/rootfs/bin/busybox | grep "program interpreter"
+${CROSS_COMPILE}readelf -a ${OUTDIR}/rootfs/bin/busybox | grep "Shared library"
 
 # TODO: Add library dependencies to rootfs
+copy_libdepends
+if [ $? -ne 0 ];
+then
+    echo "copy library dependencies fail."
+fi
+
 # Find the toolchain sysroot path dynamically
-TOOLCHAIN_SYSROOT=/home/youssef/AELD/x-tools/aarch64_toolchain/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu
+#TOOLCHAIN_SYSROOT=/home/youssef/AELD/x-tools/aarch64_toolchain/gcc-arm-10.3-2021.07-x86_64-aarch64-none-linux-gnu
+#TOOLCHAIN_SYSROOT=$(aarch64-none-linux-gnu-gcc -print-sysroot)
 
 # copy the needed libraries from toolchain sysroot to /lib and /lib64 of created rootfs
-cp "${TOOLCHAIN_SYSROOT}/aarch64-none-linux-gnu/libc/lib/ld-linux-aarch64.so.1" ${OUTDIR}/rootfs/lib
-cp "${TOOLCHAIN_SYSROOT}/aarch64-none-linux-gnu/libc/lib64/libm.so.6" "${OUTDIR}/rootfs/lib64"
-cp "${TOOLCHAIN_SYSROOT}/aarch64-none-linux-gnu/libc/lib64/libresolv.so.2" "${OUTDIR}/rootfs/lib64"
-cp "${TOOLCHAIN_SYSROOT}/aarch64-none-linux-gnu/libc/lib64/libc.so.6" "${OUTDIR}/rootfs/lib64"
+#cp "${TOOLCHAIN_SYSROOT}/lib/ld-linux-aarch64.so.1" "${OUTDIR}/rootfs/lib"
+#cp "${TOOLCHAIN_SYSROOT}/lib64/libm.so.6" "${OUTDIR}/rootfs/lib64"
+#cp "${TOOLCHAIN_SYSROOT}/lib64/libresolv.so.2" "${OUTDIR}/rootfs/lib64"
+#cp "${TOOLCHAIN_SYSROOT}/lib64/libc.so.6" "${OUTDIR}/rootfs/lib64"
 #cp "$SYSROOT_PATH/lib/aarch64-linux-gnu/libm.so.6" "${OUTDIR}/rootfs/lib64"
 
 # TODO: Make device nodes
@@ -121,19 +148,17 @@ sudo mknod -m 600 ${OUTDIR}/rootfs/dev/console c 5 1
 #sudo mknod -m 666 ${OUTDIR}/rootfs/dev/tty c 5 0
 
 # TODO: Clean and build the writer utility
-cd /home/youssef/AELD/part1_assignments/assignment-3-Youssef-74/finder-app
+cd ${FINDER_APP_DIR}
+#cd /home/youssef/AELD/part1_assignments/assignment-3-Youssef-74/finder-app
 make clean
 # edit to compile with the cross compiler aarch64-none-linux-gnu-
 make CROSS_COMPILE=aarch64-none-linux-gnu-
 
 # TODO: Copy the finder related scripts and executables to the /home directory
 # on the target rootfs
-cp writer ${OUTDIR}/rootfs/home/
-cp finder.sh ${OUTDIR}/rootfs/home/
-cp finder-test.sh ${OUTDIR}/rootfs/home/
-cp autorun-qemu.sh ${OUTDIR}/rootfs/home/
-
 mkdir -p ${OUTDIR}/rootfs/home/conf/
+
+cp writer finder.sh finder-test.sh autorun-qemu.sh ${OUTDIR}/rootfs/home/
 cp conf/* ${OUTDIR}/rootfs/home/conf/
 
 # TODO: Chown the root directory
