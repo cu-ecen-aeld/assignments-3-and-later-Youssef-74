@@ -100,9 +100,9 @@ make CONFIG_PREFIX=${OUTDIR}/rootfs ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} 
 
 cd ${OUTDIR}/rootfs
 
-echo "Library dependencies"
-${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
-${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
+#echo "Library dependencies"
+#${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
+#${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 
 # TODO: Add library dependencies to rootfs
 # Find the toolchain sysroot path dynamically
