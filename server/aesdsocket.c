@@ -39,12 +39,6 @@ int signal_sign = 0;
 /* function prototype */
 int signal_setup(int, ...);
 
-/* A structure contains network fd and file fd. */
-struct fdset {
-    int sock; 
-    int fd;
-};
-
 int tcp_socket_setup(int domain, int type, int protocol, struct sockaddr_in addr, int reuse) {
 
     int sockfd, rc, on = 1;
@@ -172,13 +166,13 @@ void *tcp_echoback (void *arg) {
 
 void tcp_set_nonblock(int sockfd, int invert) {
 
-    int rc, flag;
+    int flag;
 
     flag = fcntl(sockfd, F_GETFL);
     if (!invert) {
-        rc = fcntl(sockfd, F_SETFL, flag | O_NONBLOCK);
+        fcntl(sockfd, F_SETFL, flag | O_NONBLOCK);
     } else {
-        rc = fcntl(sockfd, F_SETFL, flag ^ O_NONBLOCK);
+        fcntl(sockfd, F_SETFL, flag ^ O_NONBLOCK);
     }
 
     return;
@@ -238,7 +232,7 @@ void process_kill(int sockfd, struct fdset * tcpfd) {
 
 int main(int argc, char *argv[]) {
 
-    int sockfd, acceptfd, rc, datafd, on = 1;
+    int sockfd, acceptfd, rc, datafd;
     pid_t id = 0;
     pthread_t pid;
     struct sockaddr_in serv, client;
@@ -307,6 +301,8 @@ int main(int argc, char *argv[]) {
 
         if(signal_sign)
         {
+            file_delete("/var/tmp/aesdsocketdata");
+            process_kill(sockfd, tcpfd);
             break;
         }
         if(acceptfd == 0)
@@ -319,7 +315,7 @@ int main(int argc, char *argv[]) {
 
         }        
     }
-    process_kill(sockfd, tcpfd);
+    
     /*tcp_close(acceptfd);
     tcp_close(sockfd);
     close(tcpfd->fd);

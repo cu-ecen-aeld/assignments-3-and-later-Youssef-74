@@ -9,7 +9,7 @@
 
 static void signal_handler(int signal_number)
 {
-    USER_LOGGING("%S","Caught signal, exiting");
+    USER_LOGGING("%s","Caught signal, exiting");
 
     signal_sign = 1;
 }
