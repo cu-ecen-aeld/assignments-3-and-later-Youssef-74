@@ -15,7 +15,7 @@ case "$1" in
         start-stop-daemon -K --oknodo -n aesdsocket --verbose
         ;;
     test)
-        echo "Terminating aesdsocket server"
+        echo "Testing aesdsocket server"
         start-stop-daemon --test -S --oknodo -n aesdsocket -a /usr/bin/aesdsocket --verbose
         ;;
     *)

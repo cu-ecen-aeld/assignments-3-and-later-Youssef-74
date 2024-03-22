@@ -2,12 +2,12 @@
 
 # Compiler and flags
 CC := $(CROSS_COMPILE)gcc
-CFLAGS := -g -Wall -Werror
+CFLAGS := -g
 CUR_PATH=$(dir $(abspath $(MAKEFILE_LIST)))
 
 # libraries to link
 LDLIBS= -lm -lpthread -lmanipulate_file -lsignal_func
-#OBJS=(filter-out aesdsocket.o $(patsubst %.c, %.o, $(wildcard *.c)))
+OBJS=(filter-out aesdsocket.o $(patsubst %.c, %.o, $(wildcard *.c)))
 LIBS_TYPE=""
 
 .PHONY: all aesdsocket clean
@@ -38,8 +38,10 @@ endif
 
 aesdsocket: libmanipulate_file.$(LIBS_TYPE) libsignal_func.$(LIBS_TYPE)
 	$(CC) $(CFLAGS) -o $@ $(@).c -L$(CUR_PATH) $(LDLIBS)
+
 manipulate_file:
 	$(CC) $(CFLAGS) -fPIC -c $@.c $(LDLIBS)
+
 signal_func:
 	$(CC) $(CFLAGS) -fPIC -c $@.c $(LDLIBS)
 
