@@ -12,6 +12,6 @@ int file_write(int fd, char *buffer, int size);
 
 int file_size(int fd);
 
-int file_read(int fd, char *buffer, int size);
+int file_read(int fd, char *buffer, int size, off_t offset);
 
 void file_delete(char *file);

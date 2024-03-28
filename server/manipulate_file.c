@@ -29,17 +29,15 @@ int file_create(char *pathname, ...)
 int file_write(int fd, char *buffer, int size)
 {
     ssize_t s;
-
     // set the pointer file to the end of the file 
     lseek(fd, 0, SEEK_END);
 
     // write to the file
-    s = write(fd, buffer, size);
-    if(s != size)
-    {
-        ERROR_HANDLER(write);
-    } 
-
+    if ((s = write(fd, buffer, size)) == -1) {
+        perror("Failed to write to file");
+        //close(fd);
+        pthread_exit(NULL);
+    }
     return s;
 }
 
@@ -53,17 +51,23 @@ int file_size(int fd)
     return end - front;
 }
 
-int file_read(int fd, char *buffer, int size)
+int file_read(int fd, char *buffer, int size, off_t offset)
 {
     int rc = 0;
-    // set the file pointer to the file begging
-    lseek(fd, 0, SEEK_SET);
+    // Set the file offset to the starting position
+    if (lseek(fd, offset, SEEK_SET) == -1) {
+        perror("Failed to seek to start position");
+        close(fd);
+        pthread_exit(NULL);
+    }
 
     rc = read(fd, buffer, size);
     if(rc == -1){
-        ERROR_HANDLER(read);
+        perror("Failed to read from file");
+        close(fd);
+        pthread_exit(NULL);
     }
-    return 0;
+    return rc;
 }
 
 void file_delete(char *file)

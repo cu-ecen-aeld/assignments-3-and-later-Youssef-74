@@ -2,11 +2,11 @@
 
 # Compiler and flags
 CC := $(CROSS_COMPILE)gcc
-CFLAGS := -g
+CFLAGS := -g -Wall -Werror
 CUR_PATH=$(dir $(abspath $(MAKEFILE_LIST)))
 
 # libraries to link
-LDLIBS= -lm -lpthread -lmanipulate_file -lsignal_func
+LDLIBS= -lm -lpthread -lrt -lthreading -lmanipulate_file -lsignal_func
 OBJS=(filter-out aesdsocket.o $(patsubst %.c, %.o, $(wildcard *.c)))
 LIBS_TYPE=""
 
@@ -24,6 +24,9 @@ libmanipulate_file.$(LIBS_TYPE): manipulate_file
 libsignal_func.$(LIBS_TYPE): signal_func
 	$(CC) $(CFLAGS) -shared -o $@ $<.o
 
+libthreading.$(LIBS_TYPE): threading
+	$(CC) $(CFLAGS) -shared -o $@ $<.o
+
 else 
 LIBS_TYPE="a"
 libmanipulate_file.$(LIBS_TYPE): manipulate_file
@@ -32,17 +35,22 @@ libmanipulate_file.$(LIBS_TYPE): manipulate_file
 libsignal_func.$(LIBS_TYPE): signal_func
 	$(AR) -rc $@ $<.o
 
+libthreading.$(LIBS_TYPE): threading
+	$(AR) -rc $@ $<.o
 endif
 
 # build 
 
-aesdsocket: libmanipulate_file.$(LIBS_TYPE) libsignal_func.$(LIBS_TYPE)
+aesdsocket: libthreading.$(LIBS_TYPE) libmanipulate_file.$(LIBS_TYPE) libsignal_func.$(LIBS_TYPE)
 	$(CC) $(CFLAGS) -o $@ $(@).c -L$(CUR_PATH) $(LDLIBS)
 
 manipulate_file:
 	$(CC) $(CFLAGS) -fPIC -c $@.c $(LDLIBS)
 
 signal_func:
+	$(CC) $(CFLAGS) -fPIC -c $@.c $(LDLIBS)
+
+threading:
 	$(CC) $(CFLAGS) -fPIC -c $@.c $(LDLIBS)
 
 clean:	
