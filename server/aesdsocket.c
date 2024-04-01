@@ -55,6 +55,7 @@ int main(int argc, char *argv[]) {
     socklen_t addrlen;
     int sockfd, acceptfd, rc;
     struct sockaddr_in serv, client;
+    int timer_start = 0;
     
     // alarm signal variables 
     struct sigaction sa;
@@ -130,16 +131,19 @@ int main(int argc, char *argv[]) {
 
     rc = signal_setup(2, SIGINT, SIGTERM);
 
-    // Start the timer
-    if (setitimer(ITIMER_REAL, &timer, NULL) == -1) {
-        perror("Error calling setitimer");
-        return EXIT_FAILURE;
-    }
-
     while (1) {
         addrlen = sizeof(struct sockaddr);
         acceptfd = tcp_incoming_check(sockfd, &client, addrlen);
         if (acceptfd > 0) {
+            // start timer after receiving first packet 
+            if(! timer_start) {
+                // Start the timer
+                if (setitimer(ITIMER_REAL, &timer, NULL) == -1) {
+                    perror("Error calling setitimer");
+                    return EXIT_FAILURE;
+                }
+                timer_start = 1;
+            } 
             //printf("Accepted connection from %s:%d", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
             SOCKET_LOGGING("Accepted connection from %d", acceptfd);
             // define variable to receive thread data parameters in 
@@ -267,9 +271,11 @@ int tcp_receive(int acceptfd, char *buffer, int size) {
     int rc;
     //DEBUG_MSG("Receiving...");
     rc = tcp_select(acceptfd);
-    rc = recv(acceptfd, buffer, size, 0); 
-    if (rc == 0) {
-        SOCKET_LOGGING("The client-side might was closed, rc: %d\n", rc);
+    if(rc > 0) {
+        rc = recv(acceptfd, buffer, size, 0); 
+        if (rc == 0) {
+            SOCKET_LOGGING("The client-side might was closed, rc: %d\n", rc);
+        }
     }
 
     return rc;
@@ -300,23 +306,23 @@ void *tcp_echoback (void *thread_param) {
             // wait for a packet which ends with '\n' character
             if (strchr(rbuffer, '\n')) {
                 
-                if(file_write(param->datafd, rbuffer, rc) <= 0){
+                if(file_write(datafd, rbuffer, rc) <= 0){
                     //perror("failed to write to /var/tmp/aesdsocketdata file\n");
                     SOCKET_LOGGING("[%d] failed to write to /var/tmp/aesdsocketdata file", param->sockfd);
                     break;
                 }
-                fsync(param->datafd);
+                fsync(datafd);
 
                 //pthread_mutex_unlock(mutex);
 
                 //pthread_mutex_lock(mutex);
                 // read the written data to the file /var/tmp/aesdsocketdata 
-                if(file_read(param->datafd, sbuffer, file_size(param->datafd), 0) <= 0) {
+                if(file_read(datafd, sbuffer, file_size(param->datafd), 0) <= 0) {
                     SOCKET_LOGGING("[%d] failed to read from /var/tmp/aesdsocketdata file", param->sockfd);
                     break;
                 }
                 
-                fsync(param->datafd);
+                fsync(datafd);
                 // send the received data back to the file /var/tmp/aesdsocketdata 
                 if(tcp_send(param->sockfd, sbuffer, strlen(sbuffer)) <= 0) {
                     SOCKET_LOGGING("[%d] failed to send data back", param->sockfd);
@@ -324,11 +330,11 @@ void *tcp_echoback (void *thread_param) {
                 }
 
                 pthread_mutex_unlock(mutex);
-                /*// set the pointer to the end of the file to continue writing where you left 
+                // set the pointer to the end of the file to continue writing where you left 
                 lseek(datafd, 0, SEEK_END);
                 // clear the buffers 
                 memset(rbuffer, 0, sizeof(rbuffer));
-                memset(sbuffer, 0, sizeof(sbuffer));*/
+                memset(sbuffer, 0, sizeof(sbuffer));
             }
         } else if (rc == 0) {
             pthread_mutex_unlock(mutex);
@@ -344,7 +350,7 @@ void *tcp_echoback (void *thread_param) {
     // in case the reciveing and sending operations ended witout problems 
     param->thread_complete_status = true;
     
-    pthread_exit(NULL);
+    //pthread_exit(NULL);
     
     return NULL;
 }
