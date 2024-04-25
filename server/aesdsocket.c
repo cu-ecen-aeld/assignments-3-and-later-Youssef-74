@@ -32,6 +32,13 @@
 #include "aesdsocket.h"
 #include "manipulate_file.h" 
 
+#define USE_AESD_CHAR_DEVICE    1
+
+#if (USE_AESD_CHAR_DEVICE == 1)
+#define FILENAME "/dev/aesdchar"
+#else   
+#define FILENAME "/var/tmp/aesdsocketdata"
+#endif
 
 /* Global variable */
 int signal_sign = 0;
@@ -55,30 +62,33 @@ int main(int argc, char *argv[]) {
     socklen_t addrlen;
     int sockfd, acceptfd, rc;
     struct sockaddr_in serv, client;
-    int timer_start = 0;
-    
-    // alarm signal variables 
-    struct sigaction sa;
-    struct itimerval timer;
 
-    SLIST_INIT(&head);
+    #if (USE_AESD_CHAR_DEVICE == 0)
+        int timer_start = 0;
+        
+        // alarm signal variables 
+        struct sigaction sa;
+        struct itimerval timer;
 
-    // Configure signal handler for timer expiration
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = timer_handler;
-    sigaction(SIGALRM, &sa, NULL);
+        SLIST_INIT(&head);
 
-    // Setup the signal handler
-    sa.sa_handler = timer_handler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    sigaction(SIGALRM, &sa, NULL);
+        // Configure signal handler for timer expiration
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_handler = timer_handler;
+        sigaction(SIGALRM, &sa, NULL);
 
-    // Configure the timer to trigger every 10 seconds
-    timer.it_value.tv_sec = 10;
-    timer.it_value.tv_usec = 0;
-    timer.it_interval.tv_sec = 10;
-    timer.it_interval.tv_usec = 0;
+        // Setup the signal handler
+        sa.sa_handler = timer_handler;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = 0;
+        sigaction(SIGALRM, &sa, NULL);
+
+        // Configure the timer to trigger every 10 seconds
+        timer.it_value.tv_sec = 10;
+        timer.it_value.tv_usec = 0;
+        timer.it_interval.tv_sec = 10;
+        timer.it_interval.tv_usec = 0;
+    #endif
 
     DEBUG_MSG("Welcom to socket Testing program");
     
@@ -104,8 +114,8 @@ int main(int argc, char *argv[]) {
     openlog(NULL, LOG_PID, LOG_USER);
 
     // Create a file to write the data received from a client.
-    file_delete("/var/tmp/aesdsocketdata");
-    datafd = file_create("/var/tmp/aesdsocketdata", 2, O_RDWR, O_CREAT);
+    
+    datafd = file_create(FILENAME, 2, O_RDWR, O_CREAT);
     if(datafd <= 0)
     {
         perror("Error Can't open file\n");
@@ -135,15 +145,17 @@ int main(int argc, char *argv[]) {
         addrlen = sizeof(struct sockaddr);
         acceptfd = tcp_incoming_check(sockfd, &client, addrlen);
         if (acceptfd > 0) {
-            // start timer after receiving first packet 
-            if(! timer_start) {
-                // Start the timer
-                if (setitimer(ITIMER_REAL, &timer, NULL) == -1) {
-                    perror("Error calling setitimer");
-                    return EXIT_FAILURE;
-                }
-                timer_start = 1;
-            } 
+            #if (USE_AESD_CHAR_DEVICE == 0)
+                // start timer after receiving first packet 
+                if(! timer_start) {
+                    // Start the timer
+                    if (setitimer(ITIMER_REAL, &timer, NULL) == -1) {
+                        perror("Error calling setitimer");
+                        return EXIT_FAILURE;
+                    }
+                    timer_start = 1;
+                } 
+            #endif
             //printf("Accepted connection from %s:%d", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
             SOCKET_LOGGING("Accepted connection from %d", acceptfd);
             // define variable to receive thread data parameters in 
@@ -308,7 +320,7 @@ void *tcp_echoback (void *thread_param) {
                 
                 if(file_write(datafd, rbuffer, rc) <= 0){
                     //perror("failed to write to /var/tmp/aesdsocketdata file\n");
-                    SOCKET_LOGGING("[%d] failed to write to /var/tmp/aesdsocketdata file", param->sockfd);
+                    SOCKET_LOGGING("[%d] failed to write to file", param->sockfd);
                     break;
                 }
                 fsync(datafd);
@@ -318,7 +330,7 @@ void *tcp_echoback (void *thread_param) {
                 //pthread_mutex_lock(mutex);
                 // read the written data to the file /var/tmp/aesdsocketdata 
                 if(file_read(datafd, sbuffer, file_size(param->datafd), 0) <= 0) {
-                    SOCKET_LOGGING("[%d] failed to read from /var/tmp/aesdsocketdata file", param->sockfd);
+                    SOCKET_LOGGING("[%d] failed to read from file", param->sockfd);
                     break;
                 }
                 
@@ -410,16 +422,20 @@ int tcp_getopt(int argc, char *argv[]) {
 } 
 
 void process_kill(int sockfd, int datafd) {
-    // terminate timer 
-    struct itimerval timer;
-    // Iterate over the list and print elements
-    //struct thread_list *current_thread;
-    // Disable the timer
-    timer.it_value.tv_sec = 0;
-    timer.it_value.tv_usec = 0;
-    timer.it_interval.tv_sec = 0;
-    timer.it_interval.tv_usec = 0;
-    setitimer(ITIMER_REAL, &timer, NULL);
+    
+    #if (USE_AESD_CHAR_DEVICE == 0)
+        // terminate timer 
+        struct itimerval timer;
+        // Iterate over the list and print elements
+        //struct thread_list *current_thread;
+        // Disable the timer
+        timer.it_value.tv_sec = 0;
+        timer.it_value.tv_usec = 0;
+        timer.it_interval.tv_sec = 0;
+        timer.it_interval.tv_usec = 0;
+        setitimer(ITIMER_REAL, &timer, NULL);
+    #endif
+
     //check_for_completed_threads();
 
     // Remove elements from the list after close and free all file descriptors
@@ -451,7 +467,9 @@ void process_kill(int sockfd, int datafd) {
     // destroy mutex
     pthread_mutex_destroy(mutex);
     free(mutex);
-    
+    #if (USE_AESD_CHAR_DEVICE == 0)
+        file_delete(FILENAME);
+    #endif
     closelog();
 }
 
@@ -508,7 +526,7 @@ void timer_handler(int signum) {
     pthread_mutex_lock(mutex);
     // write the timestamp to the file /var/tmp/aesdsocketdata 
     if(file_write(datafd, timestamp, strlen(timestamp)) <= 0){
-        perror("failed to write timestamp to /var/tmp/aesdsocketdata file\n");
+        perror("failed to write timestamp to file\n");
     }
 
     pthread_mutex_unlock(mutex);
