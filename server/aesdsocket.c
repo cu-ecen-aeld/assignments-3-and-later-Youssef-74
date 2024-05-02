@@ -308,6 +308,7 @@ void *tcp_echoback (void *thread_param) {
     int rc = 0;
     char sbuffer[BUFFER_SIZE] = {0}, rbuffer[BUFFER_SIZE] = {0};
     param->thread_complete_status = false;
+    struct aesd_seekto pair;
 
     do {
         // obtain the mutex
@@ -317,33 +318,33 @@ void *tcp_echoback (void *thread_param) {
         if (rc > 0) {
             // wait for a packet which ends with '\n' character
             if (strchr(rbuffer, '\n')) {
-                
-                if(file_write(datafd, rbuffer, rc) <= 0){
-                    //perror("failed to write to /var/tmp/aesdsocketdata file\n");
-                    SOCKET_LOGGING("[%d] failed to write to file", param->sockfd);
-                    break;
+                // check if the recived is command 
+                if(strstr(rbuffer, "AESDCHAR_IOCSEEKTO")== rbuffer)
+                {
+                    sscanf(rbuffer,"AESDCHAR_IOCSEEKTO:%u,%u", &pair.write_cmd, &pair.write_cmd_offset);
+                    printf("Found command %u, %u\n",pair.write_cmd, pair.write_cmd_offset);
+                    ioctl(param->datafd, AESDCHAR_IOCSEEKTO, &pair);
+                    read(param->datafd, sbuffer, sizeof(sbuffer));
+                    
+                } else {
+                    if(file_write(param->datafd, rbuffer, rc) <= 0){
+                        //perror("failed to write to /var/tmp/aesdsocketdata file\n");
+                        SOCKET_LOGGING("[%d] failed to write to file", param->sockfd);
+                        break;
+                    }
+                    fsync(datafd);
+                    // read the written data to the file /var/tmp/aesdsocketdata 
+                    if(file_read(param->datafd, sbuffer, file_size(param->datafd), 0) <= 0) {
+                        SOCKET_LOGGING("[%d] failed to read from file", param->sockfd);
+                        break;
+                    }
                 }
-                fsync(datafd);
-
-                //pthread_mutex_unlock(mutex);
-
-                //pthread_mutex_lock(mutex);
-                // read the written data to the file /var/tmp/aesdsocketdata 
-                if(file_read(datafd, sbuffer, file_size(param->datafd), 0) <= 0) {
-                    SOCKET_LOGGING("[%d] failed to read from file", param->sockfd);
-                    break;
-                }
-                
-                fsync(datafd);
                 // send the received data back to the file /var/tmp/aesdsocketdata 
                 if(tcp_send(param->sockfd, sbuffer, strlen(sbuffer)) <= 0) {
                     SOCKET_LOGGING("[%d] failed to send data back", param->sockfd);
                     break;
                 }
-
                 pthread_mutex_unlock(mutex);
-                // set the pointer to the end of the file to continue writing where you left 
-                lseek(datafd, 0, SEEK_END);
                 // clear the buffers 
                 memset(rbuffer, 0, sizeof(rbuffer));
                 memset(sbuffer, 0, sizeof(sbuffer));
@@ -362,7 +363,7 @@ void *tcp_echoback (void *thread_param) {
     // in case the reciveing and sending operations ended witout problems 
     param->thread_complete_status = true;
     
-    //pthread_exit(NULL);
+    pthread_exit(NULL);
     
     return NULL;
 }

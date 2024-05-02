@@ -18,6 +18,7 @@
 #ifndef AESD_SOCKET
 #define AESD_SOCKET
 
+#include <sys/ioctl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -43,6 +44,7 @@
 #include <time.h> // For POSIX interval timer
 
 #include "threading.h"
+#include "aesd_ioctl.h"
 
 #define MYPORT          9000
 #define LISTEN_BACKLOG  10
