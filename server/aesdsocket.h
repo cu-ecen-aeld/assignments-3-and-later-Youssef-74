@@ -80,7 +80,7 @@ void *tcp_echoback (void *arg);
 void tcp_set_nonblock(int sockfd, int invert);
 int tcp_select(int sockfd);
 int tcp_getopt(int argc, char *argv[]);
-void process_kill(int sockfd, int datafd);
+void process_kill(int sockfd, struct itimerval *timer, pthread_mutex_t *mutex);
 int add_thread_to_list(void * thread_param);
 void check_for_completed_threads();
 void timer_handler(int signum);

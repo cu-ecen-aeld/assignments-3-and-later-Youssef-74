@@ -40,3 +40,45 @@ int signal_setup(int number, ...)
     return rc;
     
 }
+
+void timer_setup(int period, struct itimerval *timer, struct sigaction *sa) {
+    // alarm signal variables 
+
+    // Configure signal handler for timer expiration
+    memset(sa, 0, sizeof(*sa));
+    sa->sa_handler = timer_handler;
+    sigaction(SIGALRM, sa, NULL);
+
+    // Setup the signal handler
+    sa->sa_handler = timer_handler;
+    sigemptyset(&sa->sa_mask);
+    sa->sa_flags = 0;
+    sigaction(SIGALRM, sa, NULL);
+
+    // Configure the timer to trigger every 10 seconds
+    timer->it_value.tv_sec = 10;
+    timer->it_value.tv_usec = 0;
+    timer->it_interval.tv_sec = 10;
+    timer->it_interval.tv_usec = 0;
+}
+
+int start_timer(struct itimerval *timer) {
+    // Start the timer
+    if (setitimer(ITIMER_REAL, timer, NULL) == -1) {
+        perror("Error calling setitimer");
+        return EXIT_FAILURE;
+    }
+    return 1;
+}
+
+void stop_timer(struct itimerval *timer) {
+    // terminate timer 
+    // Iterate over the list and print elements
+    //struct thread_list *current_thread;
+    // Disable the timer
+    timer->it_value.tv_sec = 0;
+    timer->it_value.tv_usec = 0;
+    timer->it_interval.tv_sec = 0;
+    timer->it_interval.tv_usec = 0;
+    setitimer(ITIMER_REAL, timer, NULL);
+}

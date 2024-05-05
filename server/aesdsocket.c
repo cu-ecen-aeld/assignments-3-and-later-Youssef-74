@@ -49,45 +49,26 @@ struct thread_list *current_thread;
 // define timer ID
 //timer_t timerid;
 // define file descriptor variable 
-int datafd;
+FILE *datafd;
 /* function prototype */
 int signal_setup(int, ...);
 
 // Define the list head structure
 SLIST_HEAD(listhead, thread_list) head = SLIST_HEAD_INITIALIZER(head);
 
-
 int main(int argc, char *argv[]) {
     pid_t id = 0;
     socklen_t addrlen;
     int sockfd, acceptfd, rc;
     struct sockaddr_in serv, client;
+    struct itimerval timer;
+
+    SLIST_INIT(&head);
 
     #if (USE_AESD_CHAR_DEVICE == 0)
-        int timer_start = 0;
-        
-        // alarm signal variables 
         struct sigaction sa;
-        struct itimerval timer;
-
-        SLIST_INIT(&head);
-
-        // Configure signal handler for timer expiration
-        memset(&sa, 0, sizeof(sa));
-        sa.sa_handler = timer_handler;
-        sigaction(SIGALRM, &sa, NULL);
-
-        // Setup the signal handler
-        sa.sa_handler = timer_handler;
-        sigemptyset(&sa.sa_mask);
-        sa.sa_flags = 0;
-        sigaction(SIGALRM, &sa, NULL);
-
-        // Configure the timer to trigger every 10 seconds
-        timer.it_value.tv_sec = 10;
-        timer.it_value.tv_usec = 0;
-        timer.it_interval.tv_sec = 10;
-        timer.it_interval.tv_usec = 0;
+        int timer_start = 0;
+        timer_setup(10, &timer, &sa);
     #endif
 
     DEBUG_MSG("Welcom to socket Testing program");
@@ -113,18 +94,9 @@ int main(int argc, char *argv[]) {
     // Set syslog configuration up.
     openlog(NULL, LOG_PID, LOG_USER);
 
-    // Create a file to write the data received from a client.
-    
-    datafd = file_create(FILENAME, 2, O_RDWR, O_CREAT);
-    if(datafd <= 0)
-    {
-        perror("Error Can't open file\n");
-        return EXIT_FAILURE;    
-    }
-
     sockfd = tcp_socket_setup(AF_INET, SOCK_STREAM, IPPROTO_TCP, serv, true);
     if (sockfd == -1) {
-        process_kill(sockfd, datafd);
+        process_kill(sockfd, &timer, mutex);
         ERROR_HANDLER(socket);
     }
     tcp_set_nonblock(sockfd, 0);
@@ -140,19 +112,24 @@ int main(int argc, char *argv[]) {
     }
 
     rc = signal_setup(2, SIGINT, SIGTERM);
-
+    
+    // Create/open a file to write the data received from a client.
+    if(datafd == NULL) {
+        datafd = fopen(FILENAME, "a+");
+        if(datafd == NULL) {
+            perror("Error Can't open /dev/aesdchar\n");
+            return EXIT_FAILURE;
+        }
+    }
+    
     while (1) {
         addrlen = sizeof(struct sockaddr);
         acceptfd = tcp_incoming_check(sockfd, &client, addrlen);
         if (acceptfd > 0) {
+            /* start timer stampe in file /var/tmp/aesdsocketdata*/
             #if (USE_AESD_CHAR_DEVICE == 0)
-                // start timer after receiving first packet 
                 if(! timer_start) {
-                    // Start the timer
-                    if (setitimer(ITIMER_REAL, &timer, NULL) == -1) {
-                        perror("Error calling setitimer");
-                        return EXIT_FAILURE;
-                    }
+                    start_timer(&timer);
                     timer_start = 1;
                 } 
             #endif
@@ -163,7 +140,7 @@ int main(int argc, char *argv[]) {
 
             // initialize the thread data 
             SOCKET_LOGGING("initialize new thread data for %d", acceptfd);
-            if ((param = thread_data_init(param, acceptfd, datafd)) == NULL)
+            if ((param = thread_data_init(param, acceptfd, datafd, mutex)) == NULL)
             {
                 LOGGING("thread data initialize fail");
                 //thread_data_deinit(param, threadid, acceptfd);
@@ -186,21 +163,19 @@ int main(int argc, char *argv[]) {
 
             }
         }
-        // loop over threads to check for 
-        check_for_completed_threads();
         // check for signal
         if(signal_sign)
         {
             // if the signal set to one so the process received SIGINT or SIGTERM
-            process_kill(sockfd, datafd);
+            process_kill(sockfd, &timer, mutex);
             break;
         }
 
         if(acceptfd == 0)
         {
-            sleep(1);
-            printf("Waiting for new connection request or SIGINT or SIGTERM to kill the process.\n");
-
+            LOGGING("Waiting for new connection request or SIGINT or SIGTERM to kill the process.\n");
+            // loop over threads to check for 
+            check_for_completed_threads();
         }        
     }
     
@@ -281,7 +256,7 @@ void tcp_close (int sockfd) {
 
 int tcp_receive(int acceptfd, char *buffer, int size) {
     int rc;
-    //DEBUG_MSG("Receiving...");
+    
     rc = tcp_select(acceptfd);
     if(rc > 0) {
         rc = recv(acceptfd, buffer, size, 0); 
@@ -289,13 +264,13 @@ int tcp_receive(int acceptfd, char *buffer, int size) {
             SOCKET_LOGGING("The client-side might was closed, rc: %d\n", rc);
         }
     }
-
+    SOCKET_LOGGING("Received >> %s", buffer);
     return rc;
 }
 
 int tcp_send(int acceptfd, char *buffer, int size) {
     int rc;
-    //DEBUG_MSG("Sending...");
+    SOCKET_LOGGING("Sending >> %s", buffer);
     rc = send(acceptfd, buffer, size, 0);
     /*if (rc != size) {
         ERROR_HANDLER(send);
@@ -312,48 +287,54 @@ void *tcp_echoback (void *thread_param) {
 
     do {
         // obtain the mutex
-        pthread_mutex_lock(mutex);
+        pthread_mutex_lock(param->mutex);
 
         rc = tcp_receive(param->sockfd, rbuffer, sizeof(rbuffer));
         if (rc > 0) {
             // wait for a packet which ends with '\n' character
             if (strchr(rbuffer, '\n')) {
                 // check if the recived is command 
-                if(strstr(rbuffer, "AESDCHAR_IOCSEEKTO")== rbuffer)
+                if(strstr(rbuffer, "AESDCHAR_IOCSEEKTO") == rbuffer)
                 {
+                    LOGGING("AESDCHAR_IOCSEEKTO");
                     sscanf(rbuffer,"AESDCHAR_IOCSEEKTO:%u,%u", &pair.write_cmd, &pair.write_cmd_offset);
                     printf("Found command %u, %u\n",pair.write_cmd, pair.write_cmd_offset);
-                    ioctl(param->datafd, AESDCHAR_IOCSEEKTO, &pair);
-                    read(param->datafd, sbuffer, sizeof(sbuffer));
+                    ioctl(fileno(param->datafd), AESDCHAR_IOCSEEKTO, &pair);
                     
                 } else {
-                    if(file_write(param->datafd, rbuffer, rc) <= 0){
+                    if(file_write(fileno(param->datafd), rbuffer, rc) <= 0){
                         //perror("failed to write to /var/tmp/aesdsocketdata file\n");
                         SOCKET_LOGGING("[%d] failed to write to file", param->sockfd);
                         break;
                     }
-                    fsync(datafd);
-                    // read the written data to the file /var/tmp/aesdsocketdata 
-                    if(file_read(param->datafd, sbuffer, file_size(param->datafd), 0) <= 0) {
-                        SOCKET_LOGGING("[%d] failed to read from file", param->sockfd);
-                        break;
-                    }
+                    SOCKET_LOGGING("Wrote >> %s", rbuffer);
+                    fflush(param->datafd);
                 }
+                
+                int size_read =  file_size(fileno(param->datafd));
+                // read the written data to the file /var/tmp/aesdsocketdata or /dev/aesdchar
+                if(file_read(fileno(param->datafd), sbuffer, size_read) <= 0) {
+                    SOCKET_LOGGING("[%d] failed to read from file", param->sockfd);
+                    break;
+                }
+                SOCKET_LOGGING("Read >> %s", sbuffer);
                 // send the received data back to the file /var/tmp/aesdsocketdata 
                 if(tcp_send(param->sockfd, sbuffer, strlen(sbuffer)) <= 0) {
                     SOCKET_LOGGING("[%d] failed to send data back", param->sockfd);
                     break;
                 }
-                pthread_mutex_unlock(mutex);
                 // clear the buffers 
                 memset(rbuffer, 0, sizeof(rbuffer));
                 memset(sbuffer, 0, sizeof(sbuffer));
+
+                pthread_mutex_unlock(param->mutex);
+
             }
         } else if (rc == 0) {
-            pthread_mutex_unlock(mutex);
+            pthread_mutex_unlock(param->mutex);
             break; // connection closed 
         } else {
-            pthread_mutex_unlock(mutex);
+            pthread_mutex_unlock(param->mutex);
             // Error receiving data
             perror("Error receiving data");
             break;
@@ -363,7 +344,6 @@ void *tcp_echoback (void *thread_param) {
     // in case the reciveing and sending operations ended witout problems 
     param->thread_complete_status = true;
     
-    pthread_exit(NULL);
     
     return NULL;
 }
@@ -422,19 +402,10 @@ int tcp_getopt(int argc, char *argv[]) {
     return false;
 } 
 
-void process_kill(int sockfd, int datafd) {
+void process_kill(int sockfd, struct itimerval *timer, pthread_mutex_t *mutex) {
     
     #if (USE_AESD_CHAR_DEVICE == 0)
-        // terminate timer 
-        struct itimerval timer;
-        // Iterate over the list and print elements
-        //struct thread_list *current_thread;
-        // Disable the timer
-        timer.it_value.tv_sec = 0;
-        timer.it_value.tv_usec = 0;
-        timer.it_interval.tv_sec = 0;
-        timer.it_interval.tv_usec = 0;
-        setitimer(ITIMER_REAL, &timer, NULL);
+        stop_timer(timer);
     #endif
 
     //check_for_completed_threads();
@@ -462,7 +433,7 @@ void process_kill(int sockfd, int datafd) {
     }
 
     free(current_thread);
-    close(datafd);
+    fclose(datafd);
     // close the server socket
     tcp_close(sockfd);
     // destroy mutex
@@ -505,7 +476,7 @@ void check_for_completed_threads()
                 //process_kill(current_thread->thread_data->sockfd, param);
                 ERROR_HANDLER(pthread_join);
             }
-            SOCKET_LOGGING("Closed Connection from %d", current_thread->thread_data->sockfd);
+            SOCKET_LOGGING("Closed Connection from %d", (current_thread->thread_data->sockfd));
             current_thread->thread_data->thread_complete_status = false;
         }
     }
@@ -526,7 +497,7 @@ void timer_handler(int signum) {
 
     pthread_mutex_lock(mutex);
     // write the timestamp to the file /var/tmp/aesdsocketdata 
-    if(file_write(datafd, timestamp, strlen(timestamp)) <= 0){
+    if(file_write(fileno(datafd), timestamp, strlen(timestamp)) <= 0){
         perror("failed to write timestamp to file\n");
     }
 

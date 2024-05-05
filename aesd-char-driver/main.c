@@ -56,7 +56,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 {
     ssize_t retval = 0;
     struct aesd_dev *dev = filp->private_data;
-    struct aesd_buffer_entry *entry = NULL;
+    struct aesd_buffer_entry *p_entry = NULL;
     size_t entry_offset = 0ULL;
 
     PDEBUG("read %zu bytes with offset %lld",count,*f_pos);
@@ -81,25 +81,28 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
         return -ERESTARTSYS;
     
     // find the entry offset for fpos in the aesd circular buffer
-    entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->circular_buffer, *f_pos, &entry_offset); 
-    if(entry == NULL) {
+    p_entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->circular_buffer, *f_pos, &entry_offset); 
+    if(p_entry == NULL) {
         PDEBUG("position exceed buffer size");
         goto out;
     }
-
-    /* adjust count if needed */
-    if(count > (entry->size  - entry_offset)) {
-        count = (entry->size  - entry_offset);
+    PDEBUG("buffer %s, size %zu", p_entry->buffptr, p_entry->size);
+    PDEBUG("entry offset %zu, count %zu",entry_offset, count);
+    /* Adjust count if need be */
+    if (count > (p_entry->size - entry_offset))
+    {
+        count = p_entry->size - entry_offset;
     }
-
-    if(copy_to_user(buf, entry->buffptr + entry_offset, count)){
+    
+    if(copy_to_user(buf, p_entry->buffptr + entry_offset, count)){
+        PDEBUG("Failed to copy to user !");
         retval = -EFAULT;
         goto out;
     }
-
+    PDEBUG("user buffer %s",buf);
     *f_pos += count;
     retval = count;
-
+    PDEBUG("read operation done succesfully\n");
     out:
         mutex_unlock(&dev->lock);
         return retval;
@@ -169,9 +172,9 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         dev->entry.size = 0;
     }
 
-    *f_pos += count;
+    //*f_pos += count;
     retval = count;
-    
+    PDEBUG("write operation done succesfully\n");
     out:
         mutex_unlock(&dev->lock);
         return retval;
@@ -196,14 +199,17 @@ static loff_t aesd_llseek(struct file *filp, loff_t off, int whence)
 
 	switch(whence) {
 	  case 0: /* SEEK_SET */
+        PDEBUG("SEEK_SET with offset %lld",off);
 		newpos = off;
 		break;
 
 	  case 1: /* SEEK_CUR */
+        PDEBUG("SEEK_CUR with offset %lld",off);
 		newpos = filp->f_pos + off;
 		break;
 
 	  case 2: /* SEEK_END */
+        PDEBUG("SEEK_END with offset %lld",off);
 		newpos = size + off;
 		break;
 
@@ -213,6 +219,11 @@ static loff_t aesd_llseek(struct file *filp, loff_t off, int whence)
 	if (newpos < 0)
         return -EINVAL;
 
+    if (newpos < 0) {
+        mutex_unlock(&dev->lock);
+        return -EINVAL;
+    }
+    
 	filp->f_pos = newpos;
 
     mutex_unlock(&dev->lock);
@@ -234,6 +245,7 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     uint8_t i;
     struct aesd_buffer_entry *entry = NULL;
     printk("Ioctl called\n");
+    PDEBUG("Ioctl called\n");
 	/*
 	 * extract the type and number bitfields, and don't decode
 	 * wrong cmds: return ENOTTY (inappropriate ioctl) before access_ok()

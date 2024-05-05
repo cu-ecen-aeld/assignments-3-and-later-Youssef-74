@@ -5,7 +5,7 @@
 
 
 
-struct thread_data* thread_data_init(struct thread_data *param, int sockfd, int datafd){
+struct thread_data* thread_data_init(struct thread_data *param, int sockfd, FILE *datafd, pthread_mutex_t  *mutex){
     
     // start by dynamically allocating memory for thread_data struct
     DEBUG_MSG("thread_data_init\n");
@@ -28,6 +28,7 @@ struct thread_data* thread_data_init(struct thread_data *param, int sockfd, int 
 
     // assigning the struct initial variables 
     param->ptid =  ptid;
+    param->mutex = mutex;
     param->sockfd = sockfd;
     param->datafd = datafd;
     param->thread_complete_status = false;

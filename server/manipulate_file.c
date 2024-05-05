@@ -1,44 +1,20 @@
 #include <stdarg.h>
 #include "manipulate_file.h"
 
-
-int file_create(char *pathname, ...)
-{
-    int fd, number, flags = 0;
-    va_list ap;
-
-    va_start(ap, pathname);
-
-    number = va_arg(ap, int);
-    while(number-- > 0)
-    {
-        flags |= va_arg(ap, int);
+int file_write(int fd, const char *buffer, int size) {
+    if (fd < 0) {
+        fprintf(stderr, "Invalid file descriptor\n");
+        return -1;
     }
 
-    fd = open(pathname, flags, S_IRWXU | S_IRWXG | S_IRWXO);
-    if(fd == -1)
-    {
-        ERROR_HANDLER(open);
-    }
-
-    va_end(ap);
-
-    return fd;
-}
-
-int file_write(int fd, char *buffer, int size)
-{
-    ssize_t s;
-    // set the pointer file to the end of the file 
-    lseek(fd, 0, SEEK_END);
-
-    // write to the file
-    if ((s = write(fd, buffer, size)) == -1) {
+    // Write to the file
+    ssize_t written = write(fd, buffer, size);
+    if (written == -1) {
         perror("Failed to write to file");
-        //close(fd);
-        pthread_exit(NULL);
+        return -1;
     }
-    return s;
+
+    return written;
 }
 
 int file_size(int fd)
@@ -51,23 +27,27 @@ int file_size(int fd)
     return end - front;
 }
 
-int file_read(int fd, char *buffer, int size, off_t offset)
-{
-    int rc = 0;
-    // Set the file offset to the starting position
-    if (lseek(fd, offset, SEEK_SET) == -1) {
-        perror("Failed to seek to start position");
-        close(fd);
-        pthread_exit(NULL);
+
+int file_read(int fd, char *buffer, int size) {
+    // Validate input parameters
+    if (fd < 0) {
+        fprintf(stderr, "Invalid file descriptor\n");
+        return -1;
     }
 
-    rc = read(fd, buffer, size);
-    if(rc == -1){
-        perror("Failed to read from file");
-        close(fd);
-        pthread_exit(NULL);
+    if (!buffer || size <= 0) {
+        fprintf(stderr, "Invalid buffer or size\n");
+        return -1;
     }
-    return rc;
+
+    // Read from the file
+    ssize_t bytes_read = read(fd, buffer, size);
+    if (bytes_read == -1) {
+        perror("Failed to read from file");
+        return -1; // Return an error code
+    }
+    
+    return (int)bytes_read; // Return the number of bytes read
 }
 
 void file_delete(char *file)

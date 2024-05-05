@@ -25,14 +25,14 @@ struct thread_data{
      * your thread implementation.
      */
     pthread_t        *ptid; // thread pointer
-    //pthread_mutex_t  *mutex; // mutex pointer
+    pthread_mutex_t  *mutex; // mutex pointer
     int              sockfd; //socket file descriptor
-    int              datafd; // data file descriptor
+    FILE             *datafd; // data file descriptor
     bool thread_complete_status; // set false if the thread didn't finish yet
 };
 
 
-struct thread_data* thread_data_init(struct thread_data *param, int sockfd, int datafd);
+struct thread_data* thread_data_init(struct thread_data *param, int sockfd, FILE *datafd, pthread_mutex_t  *mutex);
 void thread_data_deinit(struct thread_data *param, pthread_t *ptid, int sockfd);
 
 #endif
