@@ -29,6 +29,9 @@ int file_size(int fd)
 
 
 int file_read(int fd, char *buffer, int size) {
+    char buf[1024];
+    size_t count = size;
+
     // Validate input parameters
     if (fd < 0) {
         fprintf(stderr, "Invalid file descriptor\n");
@@ -39,13 +42,18 @@ int file_read(int fd, char *buffer, int size) {
         fprintf(stderr, "Invalid buffer or size\n");
         return -1;
     }
-
-    // Read from the file
-    ssize_t bytes_read = read(fd, buffer, size);
-    if (bytes_read == -1) {
-        perror("Failed to read from file");
-        return -1; // Return an error code
-    }
+    ssize_t bytes_read;
+    do {
+        // Read from the file
+        bytes_read = read(fd, buf, count);
+        if (bytes_read == -1) {
+            perror("Failed to read from file");
+            return -1; // Return an error code
+        }
+        strcat(buffer, buf);
+        count -= bytes_read;
+    }while(count);
+   
     
     return (int)bytes_read; // Return the number of bytes read
 }
