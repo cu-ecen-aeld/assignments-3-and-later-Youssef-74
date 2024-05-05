@@ -113,19 +113,18 @@ int main(int argc, char *argv[]) {
 
     rc = signal_setup(2, SIGINT, SIGTERM);
     
-    // Create/open a file to write the data received from a client.
-    if(datafd == NULL) {
-        datafd = fopen(FILENAME, "a+");
-        if(datafd == NULL) {
-            perror("Error Can't open /dev/aesdchar\n");
-            return EXIT_FAILURE;
-        }
-    }
-    
     while (1) {
         addrlen = sizeof(struct sockaddr);
         acceptfd = tcp_incoming_check(sockfd, &client, addrlen);
         if (acceptfd > 0) {
+            // Create/open a file to write the data received from a client.
+            if(datafd == NULL) {
+                datafd = fopen(FILENAME, "a+");
+                if(datafd == NULL) {
+                    perror("Error Can't open /dev/aesdchar\n");
+                    return EXIT_FAILURE;
+                }
+            }
             /* start timer stampe in file /var/tmp/aesdsocketdata*/
             #if (USE_AESD_CHAR_DEVICE == 0)
                 if(! timer_start) {
@@ -174,6 +173,11 @@ int main(int argc, char *argv[]) {
         if(acceptfd == 0)
         {
             LOGGING("Waiting for new connection request or SIGINT or SIGTERM to kill the process.\n");
+            if(datafd) {
+                // close the file in the ideal time when no data recived
+                fclose(datafd);
+            }
+            
             // loop over threads to check for 
             check_for_completed_threads();
         }        
@@ -433,7 +437,9 @@ void process_kill(int sockfd, struct itimerval *timer, pthread_mutex_t *mutex) {
     }
 
     free(current_thread);
-    fclose(datafd);
+    if(datafd) {
+        fclose(datafd);
+    }
     // close the server socket
     tcp_close(sockfd);
     // destroy mutex
