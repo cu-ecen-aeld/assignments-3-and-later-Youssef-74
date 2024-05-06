@@ -268,13 +268,13 @@ int tcp_receive(int acceptfd, char *buffer, int size) {
             SOCKET_LOGGING("The client-side might was closed, rc: %d\n", rc);
         }
     }
-    SOCKET_LOGGING("Received >> %s", buffer);
+    
     return rc;
 }
 
 int tcp_send(int acceptfd, char *buffer, int size) {
     int rc;
-    SOCKET_LOGGING("Sending >> %s", buffer);
+   
     rc = send(acceptfd, buffer, size, 0);
     /*if (rc != size) {
         ERROR_HANDLER(send);
@@ -297,6 +297,7 @@ void *tcp_echoback (void *thread_param) {
         if (rc > 0) {
             // wait for a packet which ends with '\n' character
             if (strchr(rbuffer, '\n')) {
+
                 // check if the recived is command 
                 if(strstr(rbuffer, "AESDCHAR_IOCSEEKTO") == rbuffer)
                 {
@@ -304,7 +305,6 @@ void *tcp_echoback (void *thread_param) {
                     * start offset as we will not read from file beginning so calculate it earlier */
                     int size_read =  file_size(fileno(param->datafd));
                     
-                    LOGGING("AESDCHAR_IOCSEEKTO");
                     sscanf(rbuffer,"AESDCHAR_IOCSEEKTO:%u,%u", &pair.write_cmd, &pair.write_cmd_offset);
                     printf("Found command %u, %u\n",pair.write_cmd, pair.write_cmd_offset);
                     ioctl(fileno(param->datafd), AESDCHAR_IOCSEEKTO, &pair);
@@ -314,16 +314,16 @@ void *tcp_echoback (void *thread_param) {
                         SOCKET_LOGGING("[%d] failed to read from file", param->sockfd);
                         break;
                     }
-                    SOCKET_LOGGING("Read >> %s", sbuffer);
-                    
+                     
                 } else {
+
                     if(file_write(fileno(param->datafd), rbuffer, rc) <= 0){
                         //perror("failed to write to /var/tmp/aesdsocketdata file\n");
                         SOCKET_LOGGING("[%d] failed to write to file", param->sockfd);
                         break;
                     }
-                    SOCKET_LOGGING("Wrote >> %s", rbuffer);
                     fflush(param->datafd);
+
                     /* the size of file calculation here will not change the correct 
                     * start offset as we need to read from file beginning */
                     int size_read =  file_size(fileno(param->datafd));
@@ -332,7 +332,7 @@ void *tcp_echoback (void *thread_param) {
                         SOCKET_LOGGING("[%d] failed to read from file", param->sockfd);
                         break;
                     }
-                    SOCKET_LOGGING("Read >> %s", sbuffer);
+        
                 }
                 
                 // send the received data back to the file /var/tmp/aesdsocketdata 
@@ -360,8 +360,7 @@ void *tcp_echoback (void *thread_param) {
     } while (1);
     // in case the reciveing and sending operations ended witout problems 
     param->thread_complete_status = true;
-    
-    
+
     return NULL;
 }
 

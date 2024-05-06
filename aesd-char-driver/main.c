@@ -86,8 +86,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
         PDEBUG("position exceed buffer size");
         goto out;
     }
-    PDEBUG("buffer %s, size %zu", p_entry->buffptr, p_entry->size);
-    PDEBUG("entry offset %zu, count %zu",entry_offset, count);
+    
     /* Adjust count if need be */
     if (count > (p_entry->size - entry_offset))
     {
@@ -99,10 +98,10 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
         retval = -EFAULT;
         goto out;
     }
-    PDEBUG("user buffer %s",buf);
+    
     *f_pos += count;
     retval = count;
-    PDEBUG("read operation done succesfully\n");
+    
     out:
         mutex_unlock(&dev->lock);
         return retval;
@@ -172,9 +171,9 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         dev->entry.size = 0;
     }
 
-    //*f_pos += count;
+    *f_pos += count;
     retval = count;
-    PDEBUG("write operation done succesfully\n");
+    
     out:
         mutex_unlock(&dev->lock);
         return retval;
@@ -245,7 +244,6 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     uint8_t i;
     struct aesd_buffer_entry *entry = NULL;
     printk("Ioctl called\n");
-    PDEBUG("Ioctl called\n");
 	/*
 	 * extract the type and number bitfields, and don't decode
 	 * wrong cmds: return ENOTTY (inappropriate ioctl) before access_ok()
