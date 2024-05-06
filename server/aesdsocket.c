@@ -300,10 +300,21 @@ void *tcp_echoback (void *thread_param) {
                 // check if the recived is command 
                 if(strstr(rbuffer, "AESDCHAR_IOCSEEKTO") == rbuffer)
                 {
+                    /* the size of file calculation here will affect the correct 
+                    * start offset as we will not read from file beginning so calculate it earlier */
+                    int size_read =  file_size(fileno(param->datafd));
+                    
                     LOGGING("AESDCHAR_IOCSEEKTO");
                     sscanf(rbuffer,"AESDCHAR_IOCSEEKTO:%u,%u", &pair.write_cmd, &pair.write_cmd_offset);
                     printf("Found command %u, %u\n",pair.write_cmd, pair.write_cmd_offset);
                     ioctl(fileno(param->datafd), AESDCHAR_IOCSEEKTO, &pair);
+                    
+                    // read the written data to the file /var/tmp/aesdsocketdata or /dev/aesdchar
+                    if(file_read(fileno(param->datafd), sbuffer, size_read) < 0) {
+                        SOCKET_LOGGING("[%d] failed to read from file", param->sockfd);
+                        break;
+                    }
+                    SOCKET_LOGGING("Read >> %s", sbuffer);
                     
                 } else {
                     if(file_write(fileno(param->datafd), rbuffer, rc) <= 0){
@@ -313,15 +324,17 @@ void *tcp_echoback (void *thread_param) {
                     }
                     SOCKET_LOGGING("Wrote >> %s", rbuffer);
                     fflush(param->datafd);
+                    /* the size of file calculation here will not change the correct 
+                    * start offset as we need to read from file beginning */
+                    int size_read =  file_size(fileno(param->datafd));
+                    // read the written data to the file /var/tmp/aesdsocketdata or /dev/aesdchar
+                    if(file_read(fileno(param->datafd), sbuffer, size_read) < 0) {
+                        SOCKET_LOGGING("[%d] failed to read from file", param->sockfd);
+                        break;
+                    }
+                    SOCKET_LOGGING("Read >> %s", sbuffer);
                 }
                 
-                int size_read =  file_size(fileno(param->datafd));
-                // read the written data to the file /var/tmp/aesdsocketdata or /dev/aesdchar
-                if(file_read(fileno(param->datafd), sbuffer, size_read) <= 0) {
-                    SOCKET_LOGGING("[%d] failed to read from file", param->sockfd);
-                    break;
-                }
-                SOCKET_LOGGING("Read >> %s", sbuffer);
                 // send the received data back to the file /var/tmp/aesdsocketdata 
                 if(tcp_send(param->sockfd, sbuffer, strlen(sbuffer)) <= 0) {
                     SOCKET_LOGGING("[%d] failed to send data back", param->sockfd);

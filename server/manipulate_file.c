@@ -29,8 +29,7 @@ int file_size(int fd)
 
 
 int file_read(int fd, char *buffer, int size) {
-    char buf[1024];
-    size_t count = size;
+    char buf[1024] = {0};
 
     // Validate input parameters
     if (fd < 0) {
@@ -42,17 +41,20 @@ int file_read(int fd, char *buffer, int size) {
         fprintf(stderr, "Invalid buffer or size\n");
         return -1;
     }
-    ssize_t bytes_read;
+    ssize_t bytes_read = 0;
     do {
         // Read from the file
-        bytes_read = read(fd, buf, count);
+        bytes_read = read(fd, buf, size);
         if (bytes_read == -1) {
             perror("Failed to read from file");
             return -1; // Return an error code
+        } else if(bytes_read > 0) {
+            strcat(buffer, buf);
+            size -= bytes_read;
+            memset(buf, 0, sizeof(buf));
         }
-        strcat(buffer, buf);
-        count -= bytes_read;
-    }while(count);
+        
+    }while(bytes_read);
    
     
     return (int)bytes_read; // Return the number of bytes read
